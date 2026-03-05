@@ -75,6 +75,15 @@ const commands = [
     .addChannelOption(o => o.setName("channel").setDescription("Channel for welcome messages").setRequired(true)),
   new SlashCommandBuilder().setName("announce").setDescription("Send an announcement (Admin only)")
     .addStringOption(o => o.setName("message").setDescription("Message to announce").setRequired(true)),
+  new SlashCommandBuilder().setName("kick").setDescription("Kick a member (Admin only)")
+    .addUserOption(o => o.setName("user").setDescription("User to kick").setRequired(true)),
+  new SlashCommandBuilder().setName("ban").setDescription("Ban a member (Admin only)")
+    .addUserOption(o => o.setName("user").setDescription("User to ban").setRequired(true)),
+  new SlashCommandBuilder().setName("warn").setDescription("Warn a member (Admin only)")
+    .addUserOption(o => o.setName("user").setDescription("User to warn").setRequired(true))
+    .addStringOption(o => o.setName("reason").setDescription("Reason").setRequired(true)),
+  new SlashCommandBuilder().setName("warnings").setDescription("Check a user's warnings (Admin only)")
+    .addUserOption(o => o.setName("user").setDescription("User to check").setRequired(true))
 ].map(cmd => cmd.toJSON());
 
 // ---------- REGISTER COMMANDS ----------
@@ -155,9 +164,7 @@ client.on("messageCreate", async (message) => {
   message.mentions.users.forEach(async (user) => {
     if(afkData[user.id]){
       message.channel.send(`⚠️ ${user.tag} is currently AFK: ${afkData[user.id]}`);
-      try {
-        await user.send(`💬 ${message.author.tag} mentioned you in **${message.guild.name}** while you were AFK.\nMessage: "${message.content}"`);
-      } catch {}
+      try { await user.send(`💬 ${message.author.tag} mentioned you while AFK.\nMessage: "${message.content}"`); } catch {}
     }
   });
 
@@ -188,7 +195,7 @@ client.on("interactionCreate", async (interaction) => {
   const { commandName, guild, member } = interaction;
   const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  const adminCommands = ["setautorole","setxpchannel","setwelcome","announce"];
+  const adminCommands = ["setautorole","setxpchannel","setwelcome","announce","kick","ban","warn","warnings","addxp","removexp"];
   if(adminCommands.includes(commandName) && !isAdminPerm)
     return interaction.reply({ content:"❌ Admin permission required.", ephemeral:true });
 
@@ -199,8 +206,14 @@ client.on("interactionCreate", async (interaction) => {
       .setColor("Blue")
       .setDescription("Here are all commands:")
       .addFields(
-        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`\n`/setwelcome`\n`/announce <message>`\n`?rules`" },
-        { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" }
+        { name: "Admin Commands", value:
+          "`/kick @user`\n`/ban @user`\n`/warn @user <reason>`\n`/warnings @user`\n" +
+          "`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/setautorole`\n`/setwelcome`\n" +
+          "`/setxpchannel`\n`/announce <message>`"
+        },
+        { name: "Everyone Commands", value:
+          "`/help`\n`/ping`\n`/afk <reason>`\n`/level`\n`/leaderboard`\n`?rules`"
+        }
       )
       .setFooter({ text: `Requested by ${interaction.user.tag}` })
       .setTimestamp();
@@ -226,24 +239,50 @@ client.on("interactionCreate", async (interaction) => {
     saveData();
     return interaction.reply(`✅ Level-up messages will now appear in ${channel}.`);
   }
-
-  // ---------- ANNOUNCE ----------
   if(commandName === "announce"){
     const announcement = interaction.options.getString("message");
     const embed = new EmbedBuilder()
       .setTitle("📢 Announcement")
       .setDescription(announcement)
       .setColor("Orange")
-      .setTimestamp()
-      .setFooter({ text: `Announced by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL({ dynamic:true }) });
+      .setFooter({ text: `Announced by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL({ dynamic:true }) })
+      .setTimestamp();
     interaction.channel.send({ embeds:[embed] });
-    interaction.reply({ content:"✅ Announcement sent!", ephemeral:true });
+    return interaction.reply({ content:"✅ Announcement sent!", ephemeral:true });
+  }
+  if(commandName === "kick"){
+    const target = interaction.options.getUser("user");
+    const memberTarget = guild.members.cache.get(target.id);
+    if(!memberTarget) return interaction.reply("User not found.");
+    memberTarget.kick().then(()=>interaction.reply({ content:`✅ ${target.tag} was kicked.` }))
+                     .catch(()=>interaction.reply({ content:"❌ Failed to kick." }));
+  }
+  if(commandName === "ban"){
+    const target = interaction.options.getUser("user");
+    const memberTarget = guild.members.cache.get(target.id);
+    if(!memberTarget) return interaction.reply("User not found.");
+    memberTarget.ban().then(()=>interaction.reply({ content:`✅ ${target.tag} was banned.` }))
+                     .catch(()=>interaction.reply({ content:"❌ Failed to ban." }));
+  }
+  if(commandName === "warn"){
+    const target = interaction.options.getUser("user");
+    const reason = interaction.options.getString("reason");
+    if(!warnings[guild.id]) warnings[guild.id] = {};
+    if(!warnings[guild.id][target.id]) warnings[guild.id][target.id] = [];
+    warnings[guild.id][target.id].push(reason);
+    saveData();
+    return interaction.reply(`✅ ${target.tag} has been warned: ${reason}`);
+  }
+  if(commandName === "warnings"){
+    const target = interaction.options.getUser("user");
+    const userWarnings = warnings[guild.id]?.[target.id] || [];
+    return interaction.reply(`${target.tag} has ${userWarnings.length} warning(s):\n${userWarnings.join("\n") || "No warnings."}`);
   }
 
   // ---------- PING ----------
   if(commandName === "ping"){
     const msg = await interaction.reply({ content:"🏓 Pinging...", fetchReply:true });
-    interaction.editReply(`🏓 Pong! Latency is ${msg.createdTimestamp - interaction.createdTimestamp}ms.`);
+    return interaction.editReply(`🏓 Pong! Latency is ${msg.createdTimestamp - interaction.createdTimestamp}ms.`);
   }
 
   // ---------- AFK ----------
@@ -251,7 +290,7 @@ client.on("interactionCreate", async (interaction) => {
     const reason = interaction.options.getString("reason") || "AFK";
     afkData[interaction.user.id] = reason;
     saveData();
-    interaction.reply(`✅ You are now AFK: ${reason}`);
+    return interaction.reply(`✅ You are now AFK: ${reason}`);
   }
 
   // ---------- LEVEL ----------
@@ -264,7 +303,7 @@ client.on("interactionCreate", async (interaction) => {
       .setColor("Gold")
       .setThumbnail(targetUser.displayAvatarURL({ dynamic:true }))
       .setDescription(`**Level:** ${data.level}\n**XP:** ${data.xp}/${data.level*100}`);
-    interaction.reply({ embeds:[embed] });
+    return interaction.reply({ embeds:[embed] });
   }
 
   // ---------- ADD/REMOVE XP ----------
@@ -272,35 +311,30 @@ client.on("interactionCreate", async (interaction) => {
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
     if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp:0, level:1 };
-    if(commandName === "addxp") levels[guild.id][targetUser.id].xp += amount;
-    else {
-      levels[guild.id][targetUser.id].xp -= amount;
-      if(levels[guild.id][targetUser.id].xp<0) levels[guild.id][targetUser.id].xp=0;
-    }
+    if(commandName==="addxp") levels[guild.id][targetUser.id].xp+=amount;
+    else { levels[guild.id][targetUser.id].xp-=amount; if(levels[guild.id][targetUser.id].xp<0) levels[guild.id][targetUser.id].xp=0; }
     saveData();
-    interaction.reply(`✅ ${commandName==="addxp"?"Added":"Removed"} ${amount} XP for ${targetUser.tag}.`);
+    return interaction.reply(`✅ ${commandName==="addxp"?"Added":"Removed"} ${amount} XP for ${targetUser.tag}.`);
   }
 
   // ---------- LEADERBOARD ----------
   if(commandName === "leaderboard"){
     const guildLevels = levels[guild.id];
     if(!guildLevels || Object.keys(guildLevels).length===0) return interaction.reply("No level data yet.");
-    const sorted = Object.entries(guildLevels)
-      .sort(([,a],[,b])=> b.level - a.level || b.xp - a.xp)
-      .slice(0,10);
-    let desc = "";
+    const sorted = Object.entries(guildLevels).sort(([,a],[,b])=>b.level-a.level||b.xp-b.xp).slice(0,10);
+    let desc="";
     for(let i=0;i<sorted.length;i++){
       const userId = sorted[i][0];
       const data = sorted[i][1];
       const user = await client.users.fetch(userId).catch(()=>({tag:"Unknown#0000"}));
-      desc += `**${i+1}. ${user.tag}** - Level ${data.level} | XP ${data.xp}\n`;
+      desc+=`**${i+1}. ${user.tag}** - Level ${data.level} | XP ${data.xp}\n`;
     }
     const embed = new EmbedBuilder()
       .setTitle(`🏆 Top 10 Users in ${guild.name}`)
       .setColor("Purple")
       .setDescription(desc)
       .setTimestamp();
-    interaction.reply({ embeds:[embed] });
+    return interaction.reply({ embeds:[embed] });
   }
 });
 
