@@ -121,13 +121,11 @@ client.on("guildMemberAdd", member => {
 });
 
 // ---------- MESSAGE HANDLER ----------
-client.on("messageCreate", async message => {
-  if(message.author.bot) return;
-  client.on("messageCreate", async message => {
-  if(message.author.bot) return;
+client.on("messageCreate", async (message) => {
+  if(!message.guild || message.author.bot) return;
 
-  // ---------- ?RULES ----------
-  if(message.content === "?rules"){
+  // ---------- RULES ----------
+  if(message.content.toLowerCase() === "?rules"){
     const rulesEmbed = new EmbedBuilder()
       .setColor(0x2f3136)
       .setTitle("📜 Discord Server Rules")
@@ -137,34 +135,36 @@ client.on("messageCreate", async message => {
         "**3. Keep Content Appropriate**\nNo NSFW, illegal, or pirated content.\n\n" +
         "**4. Respect Privacy**\nNo doxxing or sharing personal info without consent.\n\n" +
         "**5. No Advertising**\nAdvertising other servers, bots, or products is not allowed without permission.\n\n" +
-        "**6. Follow Staff Instructions**\nAlways respect moderators and admins; their decisions are final.\n\n" +
-        "**7. No Impersonation**\nDo not impersonate staff or other members.\n\n" +
-        "**8. English Only**\nUse English in main channels to help everyone understand. (Optional)\n\n" +
-        "**9. Have Fun!** 🎉\nEnjoy yourself and help create a friendly community!"
+        "**6. Follow Staff Instructions**\nAlways respect moderators and admins.\n\n" +
+        "**7. No Impersonation**\nDo not impersonate staff or members.\n\n" +
+        "**8. English Only**\nUse English in main channels.\n\n" +
+        "**9. Have Fun! 🎉**"
       )
       .setFooter({ text: "Follow the rules to keep the server safe and fun!" });
-
-    message.channel.send({ embeds: [rulesEmbed] });
+    return message.channel.send({ embeds: [rulesEmbed] });
   }
 
-  // Remove AFK if user sends message
+  // ---------- REMOVE AFK ----------
   if(afkData[message.author.id]){
     delete afkData[message.author.id];
     saveData();
     message.channel.send(`✅ Welcome back ${message.author.tag}, I removed your AFK status.`);
   }
 
-  // Notify if mentioned user is AFK
-  message.mentions.users.forEach(async user => {
+  // ---------- AFK MENTION ----------
+  message.mentions.users.forEach(async (user) => {
     if(afkData[user.id]){
       message.channel.send(`⚠️ ${user.tag} is currently AFK: ${afkData[user.id]}`);
-      try { await user.send(`💬 ${message.author.tag} mentioned you in **${message.guild.name}** while you were AFK.\nMessage: "${message.content}"`); } catch {}
+      try {
+        await user.send(`💬 ${message.author.tag} mentioned you in **${message.guild.name}** while you were AFK.\nMessage: "${message.content}"`);
+      } catch {}
     }
   });
 
-  // XP & leveling
+  // ---------- LEVEL SYSTEM ----------
   if(!levels[message.guild.id]) levels[message.guild.id] = {};
-  if(!levels[message.guild.id][message.author.id]) levels[message.guild.id][message.author.id] = { xp: 0, level: 1 };
+  if(!levels[message.guild.id][message.author.id])
+    levels[message.guild.id][message.author.id] = { xp: 0, level: 1 };
 
   const userData = levels[message.guild.id][message.author.id];
   const xpGain = Math.floor(Math.random() * 10) + 5;
@@ -174,7 +174,6 @@ client.on("messageCreate", async message => {
   if(userData.xp >= nextLevelXP){
     userData.level++;
     userData.xp -= nextLevelXP;
-
     const lvlChannelId = xpChannels[message.guild.id]?.[0] || message.channel.id;
     const lvlChannel = message.guild.channels.cache.get(lvlChannelId);
     if(lvlChannel) lvlChannel.send(`🎉 Congrats ${message.author}! You reached level ${userData.level}!`);
@@ -184,15 +183,14 @@ client.on("messageCreate", async message => {
 });
 
 // ---------- INTERACTION HANDLER ----------
-client.on("interactionCreate", async interaction => {
+client.on("interactionCreate", async (interaction) => {
   if(!interaction.isCommand()) return;
   const { commandName, guild, member } = interaction;
   const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-  // Admin-only commands
-  const adminCommands = ["setautorole", "setxpchannel", "setwelcome"];
+  const adminCommands = ["setautorole","setxpchannel","setwelcome"];
   if(adminCommands.includes(commandName) && !isAdminPerm)
-    return interaction.reply({ content: "❌ Admin permission required.", ephemeral: true });
+    return interaction.reply({ content:"❌ Admin permission required.", ephemeral:true });
 
   // ---------- HELP ----------
   if(commandName === "help"){
@@ -201,9 +199,8 @@ client.on("interactionCreate", async interaction => {
       .setColor("Blue")
       .setDescription("Here are my main commands:")
       .addFields(
-        { name: "Moderation", value: "`/kick @user`\n`/ban @user`\n`/mute @user <minutes>`\n`/warn @user <reason>`\n`/warnings @user`" },
-        { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" },
-        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`\n`/setwelcome`" }
+        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`\n`/setwelcome`" },
+        { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" }
       )
       .setFooter({ text: `Requested by ${interaction.user.tag}` })
       .setTimestamp();
@@ -236,7 +233,7 @@ client.on("interactionCreate", async interaction => {
 
   // ---------- PING ----------
   if(commandName === "ping"){
-    const msg = await interaction.reply({ content: "🏓 Pinging...", fetchReply: true });
+    const msg = await interaction.reply({ content:"🏓 Pinging...", fetchReply:true });
     interaction.editReply(`🏓 Pong! Latency is ${msg.createdTimestamp - interaction.createdTimestamp}ms.`);
   }
 
@@ -256,33 +253,32 @@ client.on("interactionCreate", async interaction => {
     const embed = new EmbedBuilder()
       .setTitle(`${targetUser.tag}'s Profile`)
       .setColor("Gold")
-      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
-      .setDescription(`**Level:** ${data.level}\n**XP:** ${data.xp}/${data.level * 100}`);
-    interaction.reply({ embeds: [embed] });
+      .setThumbnail(targetUser.displayAvatarURL({ dynamic:true }))
+      .setDescription(`**Level:** ${data.level}\n**XP:** ${data.xp}/${data.level*100}`);
+    interaction.reply({ embeds:[embed] });
   }
 
   // ---------- ADD/REMOVE XP ----------
   if(commandName === "addxp" || commandName === "removexp"){
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
-    if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp: 0, level: 1 };
+    if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp:0, level:1 };
     if(commandName === "addxp") levels[guild.id][targetUser.id].xp += amount;
     else {
       levels[guild.id][targetUser.id].xp -= amount;
       if(levels[guild.id][targetUser.id].xp < 0) levels[guild.id][targetUser.id].xp = 0;
     }
     saveData();
-    interaction.reply(`✅ ${commandName === "addxp" ? "Added" : "Removed"} ${amount} XP for ${targetUser.tag}.`);
+    interaction.reply(`✅ ${commandName==="addxp"?"Added":"Removed"} ${amount} XP for ${targetUser.tag}.`);
   }
 
   // ---------- LEADERBOARD ----------
   if(commandName === "leaderboard"){
     const guildLevels = levels[guild.id];
-    if(!guildLevels || Object.keys(guildLevels).length === 0) 
-      return interaction.reply("No level data yet.");
+    if(!guildLevels || Object.keys(guildLevels).length===0) return interaction.reply("No level data yet.");
     const sorted = Object.entries(guildLevels)
       .sort(([,a],[,b]) => b.level - a.level || b.xp - a.xp)
-      .slice(0, 10);
+      .slice(0,10);
     let desc = "";
     for(let i=0;i<sorted.length;i++){
       const userId = sorted[i][0];
@@ -295,7 +291,7 @@ client.on("interactionCreate", async interaction => {
       .setColor("Purple")
       .setDescription(desc)
       .setTimestamp();
-    interaction.reply({ embeds: [embed] });
+    interaction.reply({ embeds:[embed] });
   }
 });
 
