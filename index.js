@@ -1,394 +1,413 @@
-const { 
-  Client, 
-  GatewayIntentBits, 
-  REST, 
-  Routes, 
-  SlashCommandBuilder, 
-  PermissionsBitField, 
-  EmbedBuilder 
-} = require('discord.js');
-const express = require('express');
-const fs = require('fs');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require("discord.js");
+const express = require("express");
+const fs = require("fs");
 
-// ---------- EXPRESS ----------
+/* ---------------- EXPRESS ---------------- */
+
 const app = express();
-app.get("/", (req, res) => res.send("Bot is alive!"));
-app.listen(3000, () => console.log("Express server running"));
+app.get("/", (req,res)=>res.send("Bot running"));
+app.listen(3000,()=>console.log("Express running"));
 
-// ---------- CLIENT ----------
+/* ---------------- CLIENT ---------------- */
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
+intents:[
+GatewayIntentBits.Guilds,
+GatewayIntentBits.GuildMembers,
+GatewayIntentBits.GuildMessages,
+GatewayIntentBits.MessageContent
+]});
+
+/* ---------------- ENV ---------------- */
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
-// ---------- DATA FILES ----------
-const LEVELS_FILE = './levels.json';
-const WARNINGS_FILE = './warnings.json';
-const XPCHANNELS_FILE = './xpChannels.json';
-const AFK_FILE = './afk.json';
-const AUTOROLE_FILE = './autoroles.json';
-const WELCOME_FILE = './welcome.json';
+/* ---------------- FILES ---------------- */
 
-let levels = fs.existsSync(LEVELS_FILE) ? JSON.parse(fs.readFileSync(LEVELS_FILE)) : {};
-let warnings = fs.existsSync(WARNINGS_FILE) ? JSON.parse(fs.readFileSync(WARNINGS_FILE)) : {};
-let xpChannels = fs.existsSync(XPCHANNELS_FILE) ? JSON.parse(fs.readFileSync(XPCHANNELS_FILE)) : {};
-let afkData = fs.existsSync(AFK_FILE) ? JSON.parse(fs.readFileSync(AFK_FILE)) : {};
-let autoRoles = fs.existsSync(AUTOROLE_FILE) ? JSON.parse(fs.readFileSync(AUTOROLE_FILE)) : {};
-let welcomeChannels = fs.existsSync(WELCOME_FILE) ? JSON.parse(fs.readFileSync(WELCOME_FILE)) : {};
-
-function saveData(){
-  fs.writeFileSync(LEVELS_FILE, JSON.stringify(levels, null, 2));
-  fs.writeFileSync(WARNINGS_FILE, JSON.stringify(warnings, null, 2));
-  fs.writeFileSync(XPCHANNELS_FILE, JSON.stringify(xpChannels, null, 2));
-  fs.writeFileSync(AFK_FILE, JSON.stringify(afkData, null, 2));
-  fs.writeFileSync(AUTOROLE_FILE, JSON.stringify(autoRoles, null, 2));
-  fs.writeFileSync(WELCOME_FILE, JSON.stringify(welcomeChannels, null, 2));
+function load(file){
+if(!fs.existsSync(file)) fs.writeFileSync(file,"{}");
+return JSON.parse(fs.readFileSync(file));
 }
 
-// ---------- SLASH COMMANDS ----------
-const commands = [
-  new SlashCommandBuilder().setName("help").setDescription("Shows all bot commands"),
-  new SlashCommandBuilder().setName("ping").setDescription("Check bot latency"),
-  new SlashCommandBuilder().setName("afk").setDescription("Set yourself as AFK")
-    .addStringOption(o => o.setName("reason").setDescription("Reason for going AFK")),
-  new SlashCommandBuilder().setName("level").setDescription("Check your level/profile")
-    .addUserOption(o => o.setName("user").setDescription("Check someone else's profile")),
-  new SlashCommandBuilder().setName("addxp").setDescription("Add XP to a user")
-    .addUserOption(o => o.setName("user").setDescription("User to add XP").setRequired(true))
-    .addIntegerOption(o => o.setName("amount").setDescription("XP amount").setRequired(true)),
-  new SlashCommandBuilder().setName("removexp").setDescription("Remove XP from a user")
-    .addUserOption(o => o.setName("user").setDescription("User to remove XP").setRequired(true))
-    .addIntegerOption(o => o.setName("amount").setDescription("XP amount").setRequired(true)),
-  new SlashCommandBuilder().setName("leaderboard").setDescription("Shows top 10 users by level"),
-  new SlashCommandBuilder().setName("setxpchannel").setDescription("Set channel for level-up messages")
-    .addChannelOption(o => o.setName("channel").setDescription("Channel for level-up messages").setRequired(true)),
-  new SlashCommandBuilder().setName("setautorole").setDescription("Set role to auto-assign to new members")
-    .addRoleOption(o => o.setName("role").setDescription("Role to auto-assign").setRequired(true)),
-  new SlashCommandBuilder().setName("setwelcome").setDescription("Set welcome channel (admin only)")
-    .addChannelOption(o => o.setName("channel").setDescription("Channel for welcome messages").setRequired(true)),
-  new SlashCommandBuilder().setName("announce").setDescription("Make an announcement (admin only)")
-    .addStringOption(o => o.setName("message").setDescription("Message to announce").setRequired(true)),
-  new SlashCommandBuilder().setName("kick").setDescription("Kick a member (admin only)")
-    .addUserOption(o => o.setName("user").setDescription("User to kick").setRequired(true)),
-  new SlashCommandBuilder().setName("ban").setDescription("Ban a member (admin only)")
-    .addUserOption(o => o.setName("user").setDescription("User to ban").setRequired(true)),
-  new SlashCommandBuilder().setName("warn").setDescription("Warn a member (admin only)")
-    .addUserOption(o => o.setName("user").setDescription("User to warn").setRequired(true))
-    .addStringOption(o => o.setName("reason").setDescription("Reason").setRequired(true)),
-  new SlashCommandBuilder().setName("warnings").setDescription("Check warnings for a user")
-    .addUserOption(o => o.setName("user").setDescription("User to check").setRequired(true)),
-  new SlashCommandBuilder().setName("mute").setDescription("Mute a member temporarily (admin only)")
-    .addUserOption(o => o.setName("user").setDescription("User to mute").setRequired(true))
-    .addIntegerOption(o => o.setName("minutes").setDescription("Duration in minutes").setRequired(true)),
-  new SlashCommandBuilder().setName("unmute").setDescription("Unmute a member manually (admin only)")
-    .addUserOption(o => o.setName("user").setDescription("User to unmute").setRequired(true)),
-].map(cmd => cmd.toJSON());
+function save(file,data){
+fs.writeFileSync(file,JSON.stringify(data,null,2));
+}
 
-// ---------- REGISTER COMMANDS ----------
-const rest = new REST({ version: '10' }).setToken(TOKEN);
-(async () => {
-  try {
-    console.log("Registering global commands...");
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-    console.log("Commands registered globally!");
-  } catch (err) { console.error(err); }
-})();
+let levels = load("./levels.json");
+let warnings = load("./warnings.json");
+let afk = load("./afk.json");
+let autoroles = load("./autoroles.json");
+let welcome = load("./welcome.json");
+let xpChannels = load("./xpchannels.json");
+let levelRewards = load("./levelRewards.json");
 
-// ---------- READY ----------
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  client.user.setPresence({
-    status: 'idle',
-    activities: [{ name: '/help | InfernoX', type: 0 }]
-  });
+/* ---------------- COMMANDS ---------------- */
+
+const commands=[
+
+new SlashCommandBuilder().setName("help").setDescription("Show commands"),
+
+new SlashCommandBuilder().setName("ping").setDescription("Ping"),
+
+new SlashCommandBuilder().setName("afk").setDescription("Set AFK")
+.addStringOption(o=>o.setName("reason").setDescription("reason")),
+
+new SlashCommandBuilder().setName("level").setDescription("Check level")
+.addUserOption(o=>o.setName("user").setDescription("user")),
+
+new SlashCommandBuilder().setName("leaderboard").setDescription("Top levels"),
+
+new SlashCommandBuilder().setName("avatar").setDescription("User avatar")
+.addUserOption(o=>o.setName("user").setDescription("user")),
+
+new SlashCommandBuilder().setName("userinfo").setDescription("User info")
+.addUserOption(o=>o.setName("user").setDescription("user")),
+
+new SlashCommandBuilder().setName("serverinfo").setDescription("Server info"),
+
+/* ADMIN */
+
+new SlashCommandBuilder().setName("announce")
+.setDescription("Announcement")
+.addStringOption(o=>o.setName("message").setDescription("msg").setRequired(true)),
+
+new SlashCommandBuilder().setName("kick")
+.setDescription("Kick")
+.addUserOption(o=>o.setName("user").setDescription("user").setRequired(true)),
+
+new SlashCommandBuilder().setName("ban")
+.setDescription("Ban")
+.addUserOption(o=>o.setName("user").setDescription("user").setRequired(true)),
+
+new SlashCommandBuilder().setName("warn")
+.setDescription("Warn")
+.addUserOption(o=>o.setName("user").setDescription("user").setRequired(true))
+.addStringOption(o=>o.setName("reason").setDescription("reason").setRequired(true)),
+
+new SlashCommandBuilder().setName("warnings")
+.setDescription("Warnings")
+.addUserOption(o=>o.setName("user").setDescription("user").setRequired(true)),
+
+new SlashCommandBuilder().setName("mute")
+.setDescription("Mute")
+.addUserOption(o=>o.setName("user").setDescription("user").setRequired(true))
+.addIntegerOption(o=>o.setName("minutes").setDescription("minutes").setRequired(true)),
+
+new SlashCommandBuilder().setName("unmute")
+.setDescription("Unmute")
+.addUserOption(o=>o.setName("user").setDescription("user").setRequired(true)),
+
+new SlashCommandBuilder().setName("clear")
+.setDescription("Clear messages")
+.addIntegerOption(o=>o.setName("amount").setDescription("1-100").setRequired(true)),
+
+new SlashCommandBuilder().setName("lock").setDescription("Lock channel"),
+new SlashCommandBuilder().setName("unlock").setDescription("Unlock channel"),
+
+new SlashCommandBuilder().setName("slowmode")
+.setDescription("Slowmode")
+.addIntegerOption(o=>o.setName("seconds").setDescription("seconds").setRequired(true)),
+
+new SlashCommandBuilder().setName("setautorole")
+.setDescription("Set autorole")
+.addRoleOption(o=>o.setName("role").setDescription("role").setRequired(true)),
+
+new SlashCommandBuilder().setName("setwelcome")
+.setDescription("Set welcome")
+.addChannelOption(o=>o.setName("channel").setDescription("channel").setRequired(true)),
+
+new SlashCommandBuilder().setName("setxpchannel")
+.setDescription("Set xp channel")
+.addChannelOption(o=>o.setName("channel").setDescription("channel").setRequired(true)),
+
+new SlashCommandBuilder().setName("addxp")
+.setDescription("Add xp")
+.addUserOption(o=>o.setName("user").setRequired(true))
+.addIntegerOption(o=>o.setName("amount").setRequired(true)),
+
+new SlashCommandBuilder().setName("removexp")
+.setDescription("Remove xp")
+.addUserOption(o=>o.setName("user").setRequired(true))
+.addIntegerOption(o=>o.setName("amount").setRequired(true)),
+
+new SlashCommandBuilder().setName("levelreward")
+.setDescription("Set level role")
+.addIntegerOption(o=>o.setName("level").setRequired(true))
+.addRoleOption(o=>o.setName("role").setRequired(true))
+
+].map(c=>c.toJSON());
+
+/* REGISTER */
+
+const rest=new REST({version:"10"}).setToken(TOKEN);
+(async()=>{await rest.put(Routes.applicationCommands(CLIENT_ID),{body:commands});})();
+
+/* READY */
+
+client.once("ready",()=>{
+console.log("Logged in "+client.user.tag);
 });
 
-// ---------- WELCOME + AUTO-ROLE ----------
-client.on("guildMemberAdd", member => {
-  const roleId = autoRoles[member.guild.id];
-  if(roleId){
-    const role = member.guild.roles.cache.get(roleId);
-    if(role) member.roles.add(role).catch(console.error);
-  }
+/* WELCOME */
 
-  const channelId = welcomeChannels[member.guild.id];
-  if(channelId){
-    const channel = member.guild.channels.cache.get(channelId);
-    if(channel){
-      const embed = new EmbedBuilder()
-        .setColor('#00ffcc')
-        .setTitle('🎉 Welcome!')
-        .setDescription(`Welcome ${member} to **${member.guild.name}**!\nEnjoy your stay!`)
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: `Member #${member.guild.memberCount}` })
-        .setTimestamp();
-      channel.send({ embeds: [embed] });
-    }
-  }
-});
+client.on("guildMemberAdd",member=>{
 
-// ---------- MESSAGE HANDLER ----------
-client.on("messageCreate", async message => {
-  if(message.author.bot) return;
+if(autoroles[member.guild.id]){
+let role=member.guild.roles.cache.get(autoroles[member.guild.id]);
+if(role) member.roles.add(role);
+}
 
-  if(message.content === "?rules"){
-    const embed = new EmbedBuilder()
-      .setColor(0x2f3136)
-      .setTitle("📜 Discord Server Rules")
-      .setDescription(
-        "**1. Respect Everyone**\nNo harassment or hate speech.\n\n" +
-        "**2. No Spamming**\n\n**3. Keep Content Appropriate**\n\n" +
-        "**4. Respect Privacy**\n\n**5. No Advertising**\n\n**6. Follow Staff Instructions**\n\n**7. No Impersonation**\n\n**8. English Only**\n\n**9. Have Fun!** 🎉"
-      )
-      .setFooter({ text: "Follow the rules to keep the server safe and fun!" });
-    message.channel.send({ embeds: [embed] });
-  }
-
-  if(afkData[message.author.id]){
-    delete afkData[message.author.id];
-    saveData();
-    message.channel.send(`✅ Welcome back ${message.author.tag}, I removed your AFK status.`);
-  }
-
-  message.mentions.users.forEach(async user => {
-    if(afkData[user.id]){
-      message.channel.send(`⚠️ ${user.tag} is currently AFK: ${afkData[user.id]}`);
-      try { await user.send(`💬 ${message.author.tag} mentioned you in **${message.guild.name}** while you were AFK.\nMessage: "${message.content}"`); } catch {}
-    }
-  });
-
-  // XP & leveling
-  if(!levels[message.guild.id]) levels[message.guild.id] = {};
-  if(!levels[message.guild.id][message.author.id]) levels[message.guild.id][message.author.id] = { xp: 0, level: 1 };
-  const userData = levels[message.guild.id][message.author.id];
-  const xpGain = Math.floor(Math.random() * 10) + 5;
-  userData.xp += xpGain;
-
-  const nextLevelXP = userData.level * 100;
-  if(userData.xp >= nextLevelXP){
-    userData.level++;
-    userData.xp -= nextLevelXP;
-    const lvlChannelId = xpChannels[message.guild.id]?.[0] || message.channel.id;
-    const lvlChannel = message.guild.channels.cache.get(lvlChannelId);
-    if(lvlChannel) lvlChannel.send(`🎉 Congrats ${message.author}! You reached level ${userData.level}!`);
-  }
-
-  saveData();
-});
-
-// ---------- INTERACTION HANDLER ----------
-client.on("interactionCreate", async interaction => {
-  if(!interaction.isCommand()) return;
-  const { commandName, guild, member } = interaction;
-  const isAdminPerm = member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-  const adminCommands = ["setautorole","setwelcome","setxpchannel","announce","kick","ban","warn","warnings","mute","unmute","addxp","removexp"];
-  if(adminCommands.includes(commandName) && !isAdminPerm)
-    return interaction.reply({ content: "❌ Admin permission required.", ephemeral: true });
-
-  // ---------- HELP ----------
-  if(commandName === "help"){
-    const embed = new EmbedBuilder()
-      .setTitle("🤖 Bot Commands")
-      .setColor("Blue")
-      .setDescription("Here are my main commands:")
-      .addFields(
-        { name: "Moderation (Admin only)", value: "`/kick @user`\n`/ban @user`\n`/mute @user <minutes>`\n`/unmute @user`\n`/warn @user <reason>`\n`/warnings @user`\n`/announce <message>`" },
-        { name: "Levels & XP", value: "`/level`\n`/addxp @user <amount>`\n`/removexp @user <amount>`\n`/leaderboard`\n`/setxpchannel`" },
-        { name: "Utility", value: "`/ping`\n`/afk <reason>`\n`/setautorole`\n`/setwelcome`\n`?rules`" }
-      )
-      .setFooter({ text: `Requested by ${interaction.user.tag}` })
-      .setTimestamp();
-    return interaction.reply({ embeds: [embed] });
-  }
-
-  // ---------- PING ----------
-  if(commandName === "ping"){
-    const msg = await interaction.reply({ content: "🏓 Pinging...", fetchReply: true });
-    interaction.editReply(`🏓 Pong! Latency is ${msg.createdTimestamp - interaction.createdTimestamp}ms.`);
-  }
-
-  // ---------- AFK ----------
-  if(commandName === "afk"){
-    const reason = interaction.options.getString("reason") || "AFK";
-    afkData[interaction.user.id] = reason;
-    saveData();
-    interaction.reply(`✅ You are now AFK: ${reason}`);
-  }
-
-  // ---------- LEVEL ----------
-  if(commandName === "level"){
-    const targetUser = interaction.options.getUser("user") || interaction.user;
-    if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp: 0, level: 1 };
-    const data = levels[guild.id][targetUser.id];
-    const embed = new EmbedBuilder()
-      .setTitle(`${targetUser.tag}'s Profile`)
-      .setColor("Gold")
-      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
-      .setDescription(`**Level:** ${data.level}\n**XP:** ${data.xp}/${data.level * 100}`);
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // ---------- ADD/REMOVE XP ----------
-  if(commandName === "addxp" || commandName === "removexp"){
-    const targetUser = interaction.options.getUser("user");
-    const amount = interaction.options.getInteger("amount");
-    if(!levels[guild.id][targetUser.id]) levels[guild.id][targetUser.id] = { xp: 0, level: 1 };
-    if(commandName === "addxp") levels[guild.id][targetUser.id].xp += amount;
-    else {
-      levels[guild.id][targetUser.id].xp -= amount;
-      if(levels[guild.id][targetUser.id].xp < 0) levels[guild.id][targetUser.id].xp = 0;
-    }
-    saveData();
-    interaction.reply(`✅ ${commandName === "addxp" ? "Added" : "Removed"} ${amount} XP for ${targetUser.tag}.`);
-  }
-
-  // ---------- LEADERBOARD ----------
-  if(commandName === "leaderboard"){
-    const guildLevels = levels[guild.id];
-    if(!guildLevels || Object.keys(guildLevels).length === 0) 
-      return interaction.reply("No level data yet.");
-    const sorted = Object.entries(guildLevels)
-      .sort(([,a],[,b]) => b.level - a.level || b.xp - a.xp)
-      .slice(0, 10);
-    let desc = "";
-    for(let i=0;i<sorted.length;i++){
-      const userId = sorted[i][0];
-      const data = sorted[i][1];
-      const user = await client.users.fetch(userId).catch(()=>({tag:"Unknown#0000"}));
-      desc += `**${i+1}. ${user.tag}** - Level ${data.level} | XP ${data.xp}\n`;
-    }
-    const embed = new EmbedBuilder()
-      .setTitle(`🏆 Top 10 Users in ${guild.name}`)
-      .setColor("Purple")
-      .setDescription(desc)
-      .setTimestamp();
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // ---------- SET COMMANDS ----------
-  if(commandName === "setwelcome"){
-    const channel = interaction.options.getChannel("channel");
-    welcomeChannels[guild.id] = channel.id;
-    saveData();
-    return interaction.reply(`✅ Welcome messages will now appear in ${channel}.`);
-  }
-
-  if(commandName === "setautorole"){
-    const role = interaction.options.getRole("role");
-    autoRoles[guild.id] = role.id;
-    saveData();
-    return interaction.reply(`✅ Auto-role set to ${role.name}.`);
-  }
-
-  if(commandName === "setxpchannel"){
-    const channel = interaction.options.getChannel("channel");
-    xpChannels[guild.id] = [channel.id];
-    saveData();
-    return interaction.reply(`✅ Level-up messages will now appear in ${channel}.`);
-  }
-
-  // ---------- ANNOUNCE ----------
-  if(commandName === "announce"){
-    const messageContent = interaction.options.getString("message");
-    const embed = new EmbedBuilder()
-      .setTitle("📢 Announcement")
-      .setDescription(messageContent)
-      .setColor("Orange")
-      .setFooter({ text: `Announcement by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL({ dynamic:true }) })
-      .setTimestamp();
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // ---------- KICK ----------
-  if(commandName === "kick"){
-    const targetUser = interaction.options.getUser("user");
-    const memberTarget = guild.members.cache.get(targetUser.id);
-    if(!memberTarget) return interaction.reply({ content: "User not found.", ephemeral:true });
-    memberTarget.kick().then(() => interaction.reply(`${targetUser.tag} has been kicked.`))
-                       .catch(() => interaction.reply("❌ Failed to kick."));
-  }
-
-  // ---------- BAN ----------
-  if(commandName === "ban"){
-    const targetUser = interaction.options.getUser("user");
-    const memberTarget = guild.members.cache.get(targetUser.id);
-    if(!memberTarget) return interaction.reply({ content: "User not found.", ephemeral:true });
-    memberTarget.ban().then(() => interaction.reply(`${targetUser.tag} has been banned.`))
-                      .catch(() => interaction.reply("❌ Failed to ban."));
-  }
-
-  // ---------- WARN ----------
-  if(commandName === "warn"){
-    const targetUser = interaction.options.getUser("user");
-    const reason = interaction.options.getString("reason");
-    if(!warnings[guild.id]) warnings[guild.id] = {};
-    if(!warnings[guild.id][targetUser.id]) warnings[guild.id][targetUser.id] = [];
-    warnings[guild.id][targetUser.id].push(reason);
-    saveData();
-    interaction.reply(`${targetUser.tag} has been warned for: ${reason}`);
-  }
-
-  // ---------- WARNINGS ----------
-  if(commandName === "warnings"){
-    const targetUser = interaction.options.getUser("user");
-    const userWarnings = warnings[guild.id]?.[targetUser.id] || [];
-    const embed = new EmbedBuilder()
-      .setTitle(`${targetUser.tag}'s Warnings`)
-      .setColor("Red")
-      .setDescription(userWarnings.length ? userWarnings.map((w,i)=>`${i+1}. ${w}`).join("\n") : "No warnings.");
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // ---------- MUTE ----------
-  if(commandName === "mute"){
-    const targetUser = interaction.options.getUser("user");
-    const minutes = interaction.options.getInteger("minutes");
-    const memberTarget = guild.members.cache.get(targetUser.id);
-    if(!memberTarget) return interaction.reply({ content: "User not found.", ephemeral:true });
-
-    let muteRole = guild.roles.cache.find(r => r.name === "Muted");
-    if(!muteRole) return interaction.reply({ content: "❌ 'Muted' role not found. Please create it manually.", ephemeral:true });
-
-    memberTarget.roles.add(muteRole).then(()=>{
-      const endTime = new Date(Date.now() + minutes*60*1000);
-      const embed = new EmbedBuilder()
-        .setTitle("🔇 Member Muted")
-        .setDescription(`${targetUser.tag} has been muted for **${minutes} minute(s)**.`)
-        .addFields({ name: "Ends At", value: `<t:${Math.floor(endTime.getTime()/1000)}:R>` })
-        .setColor("Red")
-        .setTimestamp()
-        .setFooter({ text: `Action by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL({ dynamic:true }) });
-      interaction.reply({ embeds: [embed] });
-
-      setTimeout(()=>{
-        if(memberTarget.roles.cache.has(muteRole.id)) memberTarget.roles.remove(muteRole).catch(console.error);
-      }, minutes*60*1000);
-    }).catch(()=>interaction.reply({ content: "❌ Failed to mute.", ephemeral:true }));
-  }
-
-  // ---------- UNMUTE ----------
-  if(commandName === "unmute"){
-    const targetUser = interaction.options.getUser("user");
-    const memberTarget = guild.members.cache.get(targetUser.id);
-    if(!memberTarget) return interaction.reply({ content: "User not found.", ephemeral:true });
-
-    let muteRole = guild.roles.cache.find(r => r.name === "Muted");
-    if(!muteRole) return interaction.reply({ content: "❌ 'Muted' role not found.", ephemeral:true });
-    if(!memberTarget.roles.cache.has(muteRole.id)) return interaction.reply({ content: "User is not muted.", ephemeral:true });
-
-    memberTarget.roles.remove(muteRole).then(()=>{
-      interaction.reply(`✅ ${targetUser.tag} has been unmuted.`);
-    }).catch(()=>interaction.reply({ content: "❌ Failed to unmute.", ephemeral:true }));
-  }
+if(welcome[member.guild.id]){
+let ch=member.guild.channels.cache.get(welcome[member.guild.id]);
+if(ch){
+let e=new EmbedBuilder()
+.setTitle("Welcome!")
+.setDescription(`Welcome ${member}`)
+.setColor("Green");
+ch.send({embeds:[e]});
+}
+}
 
 });
+
+/* MESSAGE */
+
+client.on("messageCreate",msg=>{
+
+if(msg.author.bot) return;
+
+/* rules */
+
+if(msg.content=="?rules"){
+msg.channel.send("📜 Respect everyone | No spam | Follow staff");
+}
+
+/* AFK */
+
+if(afk[msg.author.id]){
+delete afk[msg.author.id];
+save("./afk.json",afk);
+msg.channel.send("Welcome back, AFK removed.");
+}
+
+/* XP */
+
+if(!levels[msg.guild.id]) levels[msg.guild.id]={};
+if(!levels[msg.guild.id][msg.author.id]) levels[msg.guild.id][msg.author.id]={xp:0,level:1};
+
+let data=levels[msg.guild.id][msg.author.id];
+data.xp+=Math.floor(Math.random()*10)+5;
+
+let need=data.level*100;
+
+if(data.xp>=need){
+
+data.level++;
+data.xp-=need;
+
+msg.channel.send(`🎉 ${msg.author} leveled to ${data.level}`);
+
+let reward=levelRewards[msg.guild.id]?.[data.level];
+if(reward){
+let role=msg.guild.roles.cache.get(reward);
+if(role) msg.member.roles.add(role);
+}
+
+}
+
+save("./levels.json",levels);
+
+});
+
+/* INTERACTIONS */
+
+client.on("interactionCreate",async i=>{
+
+if(!i.isCommand()) return;
+
+let cmd=i.commandName;
+let guild=i.guild;
+let member=i.member;
+
+let admin=member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+function adminCheck(){
+if(!admin){
+i.reply({content:"Admin only",ephemeral:true});
+return true;
+}
+}
+
+/* HELP */
+
+if(cmd=="help"){
+let e=new EmbedBuilder()
+.setTitle("Commands")
+.setDescription("Moderation + leveling bot")
+.addFields(
+{name:"User",value:"/level /leaderboard /avatar /userinfo /serverinfo /afk"},
+{name:"Admin",value:"/kick /ban /warn /mute /clear /lock /unlock"}
+);
+return i.reply({embeds:[e]});
+}
+
+/* PING */
+
+if(cmd=="ping"){
+return i.reply("Pong "+client.ws.ping+"ms");
+}
+
+/* AFK */
+
+if(cmd=="afk"){
+let r=i.options.getString("reason")||"AFK";
+afk[i.user.id]=r;
+save("./afk.json",afk);
+i.reply("You are now AFK");
+}
+
+/* LEVEL */
+
+if(cmd=="level"){
+
+let user=i.options.getUser("user")||i.user;
+
+if(!levels[guild.id][user.id]) levels[guild.id][user.id]={xp:0,level:1};
+
+let d=levels[guild.id][user.id];
+
+let e=new EmbedBuilder()
+.setTitle(user.tag)
+.setDescription(`Level ${d.level}\nXP ${d.xp}/${d.level*100}`);
+
+i.reply({embeds:[e]});
+
+}
+
+/* LEADERBOARD */
+
+if(cmd=="leaderboard"){
+
+let g=levels[guild.id];
+let sorted=Object.entries(g).sort((a,b)=>b[1].level-a[1].level).slice(0,10);
+
+let text="";
+
+for(let x=0;x<sorted.length;x++){
+
+let u=await client.users.fetch(sorted[x][0]);
+text+=`${x+1}. ${u.tag} - lvl ${sorted[x][1].level}\n`;
+
+}
+
+i.reply(text||"No data");
+
+}
+
+/* AVATAR */
+
+if(cmd=="avatar"){
+let u=i.options.getUser("user")||i.user;
+
+let e=new EmbedBuilder()
+.setImage(u.displayAvatarURL({size:1024}));
+
+i.reply({embeds:[e]});
+}
+
+/* USERINFO */
+
+if(cmd=="userinfo"){
+let u=i.options.getUser("user")||i.user;
+
+let e=new EmbedBuilder()
+.setTitle(u.tag)
+.addFields(
+{name:"ID",value:u.id},
+{name:"Created",value:`<t:${Math.floor(u.createdTimestamp/1000)}:R>`}
+);
+
+i.reply({embeds:[e]});
+}
+
+/* SERVERINFO */
+
+if(cmd=="serverinfo"){
+
+let e=new EmbedBuilder()
+.setTitle(guild.name)
+.addFields(
+{name:"Members",value:String(guild.memberCount)},
+{name:"Server ID",value:guild.id}
+);
+
+i.reply({embeds:[e]});
+}
+
+/* CLEAR */
+
+if(cmd=="clear"){
+if(adminCheck()) return;
+
+let a=i.options.getInteger("amount");
+
+await i.channel.bulkDelete(a,true);
+
+i.reply({content:`Deleted ${a}`,ephemeral:true});
+}
+
+/* LOCK */
+
+if(cmd=="lock"){
+if(adminCheck()) return;
+
+await i.channel.permissionOverwrites.edit(guild.roles.everyone,{SendMessages:false});
+
+i.reply("Channel locked");
+}
+
+/* UNLOCK */
+
+if(cmd=="unlock"){
+if(adminCheck()) return;
+
+await i.channel.permissionOverwrites.edit(guild.roles.everyone,{SendMessages:true});
+
+i.reply("Channel unlocked");
+}
+
+/* SLOWMODE */
+
+if(cmd=="slowmode"){
+if(adminCheck()) return;
+
+let s=i.options.getInteger("seconds");
+
+await i.channel.setRateLimitPerUser(s);
+
+i.reply("Slowmode "+s+"s");
+}
+
+/* LEVEL REWARD */
+
+if(cmd=="levelreward"){
+if(adminCheck()) return;
+
+let level=i.options.getInteger("level");
+let role=i.options.getRole("role");
+
+if(!levelRewards[guild.id]) levelRewards[guild.id]={};
+
+levelRewards[guild.id][level]=role.id;
+
+save("./levelRewards.json",levelRewards);
+
+i.reply(`Users get ${role.name} at level ${level}`);
+}
+
+});
+
+/* LOGIN */
 
 client.login(TOKEN);
